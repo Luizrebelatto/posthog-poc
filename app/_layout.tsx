@@ -32,12 +32,15 @@ export default function RootLayout() {
       autocapture={{
         captureScreens: false,
         captureTouches: true,
-        propsToCapture: ['testID'],
+        customLabelProp: 'ph-label',
+        noCaptureProp: 'ph-no-capture',
+        propsToCapture: ['testID', 'ph-label'],
       }}
     >
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <Stack>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="product/[id]" options={{ presentation: 'card' }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>
