@@ -9,9 +9,11 @@ export default {
     userInterfaceStyle: 'automatic',
     newArchEnabled: true,
     ios: {
+      bundleIdentifier: 'com.anonymous.pocposthog',
       supportsTablet: true,
     },
     android: {
+      package: 'com.anonymous.pocposthog',
       adaptiveIcon: {
         backgroundColor: '#E6F4FE',
         foregroundImage: './assets/images/android-icon-foreground.png',
