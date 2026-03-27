@@ -1,11 +1,18 @@
 import { usePostHog } from 'posthog-react-native';
-import { FlatList, StyleSheet, TouchableOpacity } from 'react-native';
+import {
+  FlatList,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+} from 'react-native';
 import { useRouter } from 'expo-router';
+import { useMemo, useRef, useState } from 'react';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 
-const PRODUCTS = [
+export const PRODUCTS = [
   { id: '1', name: 'Wireless Headphones', price: 99.99, category: 'electronics' },
   { id: '2', name: 'Running Shoes', price: 129.99, category: 'sports' },
   { id: '3', name: 'Backpack', price: 59.99, category: 'accessories' },
@@ -18,9 +25,52 @@ const PRODUCTS = [
   { id: '10', name: 'Travel Mug', price: 19.99, category: 'accessories' },
 ];
 
+const CATEGORIES = ['all', 'electronics', 'sports', 'accessories'] as const;
+
 export default function ProductsScreen() {
   const posthog = usePostHog();
   const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const filteredProducts = useMemo(() => {
+    return PRODUCTS.filter((product) => {
+      const matchesSearch = product.name
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+      const matchesCategory =
+        selectedCategory === 'all' || product.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [searchQuery, selectedCategory]);
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      if (query.trim().length > 0) {
+        posthog.capture('product_searched', {
+          search_query: query.trim(),
+          results_count: PRODUCTS.filter((p) =>
+            p.name.toLowerCase().includes(query.toLowerCase())
+          ).length,
+        });
+      }
+    }, 500);
+  };
+
+  const handleCategoryFilter = (category: string) => {
+    setSelectedCategory(category);
+    posthog.capture('category_filtered', {
+      category,
+      previous_category: selectedCategory,
+      results_count: PRODUCTS.filter(
+        (p) => category === 'all' || p.category === category
+      ).length,
+    });
+  };
 
   const handleProductPress = (product: (typeof PRODUCTS)[number]) => {
     posthog.capture('product_clicked', {
@@ -28,16 +78,62 @@ export default function ProductsScreen() {
       product_name: product.name,
       product_price: product.price,
       product_category: product.category,
+      search_query: searchQuery || null,
+      active_filter: selectedCategory,
     });
     router.push({ pathname: '/product/[id]', params: { id: product.id } });
   };
 
   return (
     <ThemedView style={styles.container}>
+      <ThemedView style={styles.searchContainer}>
+        <TextInput
+          testID="search-input"
+          style={styles.searchInput}
+          placeholder="Search products..."
+          placeholderTextColor="#999"
+          value={searchQuery}
+          onChangeText={handleSearch}
+          autoCapitalize="none"
+        />
+      </ThemedView>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoriesContainer}
+      >
+        {CATEGORIES.map((category) => (
+          <TouchableOpacity
+            key={category}
+            testID={`filter-${category}`}
+            style={[
+              styles.categoryChip,
+              selectedCategory === category && styles.categoryChipActive,
+            ]}
+            onPress={() => handleCategoryFilter(category)}
+          >
+            <ThemedText
+              style={[
+                styles.categoryChipText,
+                selectedCategory === category && styles.categoryChipTextActive,
+              ]}
+            >
+              {category.charAt(0).toUpperCase() + category.slice(1)}
+            </ThemedText>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
       <FlatList
-        data={PRODUCTS}
+        data={filteredProducts}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          <ThemedView style={styles.emptyContainer}>
+            <ThemedText style={styles.emptyText}>No products found</ThemedText>
+          </ThemedView>
+        }
         renderItem={({ item }) => (
           <TouchableOpacity
             testID={`product-${item.id}`}
@@ -61,9 +157,54 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  searchContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    color: '#333',
+    backgroundColor: '#f9f9f9',
+  },
+  categoriesContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  categoryChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    backgroundColor: 'transparent',
+  },
+  categoryChipActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  categoryChipText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  categoryChipTextActive: {
+    color: '#fff',
+  },
   listContent: {
     padding: 16,
     gap: 12,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 16,
+    opacity: 0.5,
   },
   productCard: {
     flexDirection: 'row',
